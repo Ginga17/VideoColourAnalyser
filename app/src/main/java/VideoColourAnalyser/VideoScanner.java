@@ -5,7 +5,9 @@ package VideoColourAnalyser;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.nio.Buffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,17 +28,100 @@ import org.bytedeco.javacv.FFmpegLogCallback;
 
 
 
+
 import java.awt.Color;
 
 
 import java.awt.image.BufferedImage;
 
-public class App {
+public class VideoScanner implements java.io.Serializable{
     
-    File file;
-    HashMap<Color, Integer> colors = new HashMap<>();
-    public App(File file) {
+    // The video to be scanned
+    private File file;
+    // All the colours used in the video, and the number of pixels of that colour
+    private HashMap<Color, Integer> colors = new HashMap<>();
+    private int fps = 0;
+    // Lists the average colour of each frame of the video in order
+    private List<Color> aveColorsInOrder = null;
+    // The calculated dominant colours in the image that can be found after processing
+    private List<ColorWeight> dominantColours = null;
+
+
+    public VideoScanner(File file) {
         this.file = file;
+    }
+
+    public String getFileName() {
+        String fileName = file.getName();
+        int pos = fileName.lastIndexOf(".");
+        if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
+            fileName = fileName.substring(0, pos);
+        }
+        return file.getName();
+    }
+
+    
+    private void processVideo(int targFPS) throws Exception {
+        fps = targFPS;
+        StopWatch();
+        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
+        frameGrabber.setFormat("mp4");
+        // frameGrabber.setFrameRate(2.0);
+        // FFmpegLogCallback.set();
+        frameGrabber.start(); 
+        StopWatch("frame grabber initialised");
+        Frame f; 
+
+        Java2DFrameConverter c = new Java2DFrameConverter(); 
+        int totalFrames = 0;
+        double includedFrames = 0;
+        
+        // The ratio of frames to be included to the base frame rate of the video.
+        double FPSConversionRate = targFPS/frameGrabber.getFrameRate();  
+        System.out.println("fps: " + FPSConversionRate);
+        List<Color> aveColorsInOrder = new ArrayList<>();
+
+        StopWatch();
+
+        while ((f = frameGrabber.grab()) != null) {
+            try {
+                BufferedImage bi = c.convert(f);;
+                if (bi == null) {
+                    // Audio frame, discarded
+                    // System.out.println("audio frame");
+                    continue;
+                }
+                // System.out.println("video frame");
+                totalFrames++;
+                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
+                if (includedFrames/totalFrames < FPSConversionRate) {
+                    addImageToColors(bi);
+                    includedFrames++;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        c.close();
+        StopWatch(aveColorsInOrder.size() + " frames processed");
+        StopWatch();
+        VideoDissect rect = new VideoDissect(aveColorsInOrder);
+        StopWatch("Video dissect generated");
+        JFrame window = new JFrame();
+        window.setSize(800, 800);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        window.add(rect);
+
+        window.setVisible(true);
+        StopWatch();
+        List<ColorWeight> cws = getColorWeights();
+        cws.sort(new ByHSB());
+        StopWatch("Colours sorted");
+        // findDominantColors(cws);
+        StopWatch();
+        graphColour(cws, 8);
+        StopWatch("8 colours generated");
+        frameGrabber.stop();
     }
 
     private static List<ColorWeight> parseImage(BufferedImage image) throws IOException {
@@ -149,7 +234,7 @@ public class App {
         window.setVisible(true);
     }
 
-    private static void findDominantColors(List<ColorWeight> colorsByWeight) {
+    private void findDominantColors(List<ColorWeight> colorsByWeight) {
         
         List<Centroid> centroids = kMeansCluster(colorsByWeight,5);
 
@@ -168,7 +253,8 @@ public class App {
             dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum();
             k++;
         }
-        displayColors(lastMeans);
+        dominantColours = lastMeans;
+        displayColors(dominantColours);
     }
 
     private List<ColorWeight> getColorWeights() {
@@ -179,66 +265,6 @@ public class App {
         return cws;
     }
 
-    private void processVideo(int targFPS) throws Exception {
-        StopWatch();
-        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
-        frameGrabber.setFormat("mp4");
-        // frameGrabber.setFrameRate(2.0);
-        // FFmpegLogCallback.set();
-        frameGrabber.start(); 
-        StopWatch("frame grabber initialised");
-        Frame f; 
-
-        Java2DFrameConverter c = new Java2DFrameConverter(); 
-        int totalFrames = 0;
-        double includedFrames = 0;
-        
-        double FPSConversionRate = targFPS/frameGrabber.getFrameRate();  
-        System.out.println("fps: " + FPSConversionRate);
-
-        List<Color> aveColorsInOrder = new ArrayList<>();
-        StopWatch();
-
-        while ((f = frameGrabber.grab()) != null) {
-            try {
-                BufferedImage bi = c.convert(f);;
-                if (bi == null) {
-                    // Audio frame, discarded
-                    // System.out.println("audio frame");
-                    continue;
-                }
-                // System.out.println("video frame");
-                totalFrames++;
-                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
-                if (includedFrames/totalFrames < FPSConversionRate) {
-                    addImageToColors(bi);
-                    includedFrames++;
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        c.close();
-        StopWatch(aveColorsInOrder.size() + " frames processed");
-        StopWatch();
-        VideoDissect rect = new VideoDissect(aveColorsInOrder);
-        StopWatch("Video dissect generated");
-        JFrame window = new JFrame();
-        window.setSize(800, 800);
-        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        window.add(rect);
-
-        window.setVisible(true);
-        StopWatch();
-        List<ColorWeight> cws = getColorWeights();
-        cws.sort(new ByHSB());
-        StopWatch("Colours sorted");
-        // findDominantColors(cws);
-        StopWatch();
-        graphColour(cws, 8);
-        StopWatch("8 colours generated");
-        frameGrabber.stop();
-    }
 
     
     private void processVideoDissect() throws Exception {
@@ -306,14 +332,20 @@ public class App {
     
     public static void main(String []args) throws IOException, Exception
     {
-        File file = new File("videos\\aotl.mp4");
-        App app = new App(file);
+        File file = new File("videos\\All_of_the_Lights.mp4");
+        VideoScanner app = new VideoScanner(file);
 
-
-        // app.StopWatch();
-        app.processVideoDissect();    //160 secs : 5.95 secs per frame
-        // app.StopWatch("Video proccessing complete");
+        app.processVideo(24);   //160 secs : 5.95 secs per frame
         
+        FileOutputStream outputFile = new FileOutputStream(app.getFileName());
+        ObjectOutputStream out = new ObjectOutputStream(outputFile);
+
+        // Method for serialization of object
+        out.writeObject(out);
+
+        out.close();
+        outputFile.close();
+
         // app.StopWatch();
         // app.processVideo(24);    //143 secs : 5.95 secs per frame
         // app.StopWatch();

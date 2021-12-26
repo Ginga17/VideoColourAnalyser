@@ -3,8 +3,10 @@
  */
 package VideoColourAnalyser;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.Buffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,11 +14,16 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
+import javax.swing.Action;
 import javax.swing.JFrame;
 
+import org.bytedeco.ffmpeg.avutil.LogCallback;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
+
+import org.bytedeco.javacv.FFmpegLogCallback;
+
 
 
 import java.awt.Color;
@@ -25,13 +32,15 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 
 public class App {
-    public String getGreeting() {
-        return "Hello World!";
+    
+    File file;
+    HashMap<Color, Integer> colors = new HashMap<>();
+    public App(File file) {
+        this.file = file;
     }
 
     private static List<ColorWeight> parseImage(BufferedImage image) throws IOException {
         HashMap<Color,Integer> colors = new HashMap<>();
-        System.out.println("MMMMMMMNNNNNNOOOOO" + image.getWidth() + " aaaaaaaa");
         for (int x = 0; x <image.getWidth(); x++) {
             for (int y = 0; y< image.getHeight(); y++) {
                 int clr = image.getRGB(x, y);
@@ -50,6 +59,21 @@ public class App {
         }
         colorsByWeight.sort(new ByHSB());
         return colorsByWeight;
+    }
+
+    private void addImageToColors(BufferedImage image) {
+        for (int x = 0; x <image.getWidth(); x++) {
+            for (int y = 0; y< image.getHeight(); y++) {
+                int clr = image.getRGB(x, y);
+                Color color = new Color(clr);
+                if (colors.containsKey(color)) {
+                    colors.put(color, colors.get(color) + 1);
+                }
+                else {
+                    colors.put(color, 1);    
+                }
+            }
+        }
     }
 
     private static HashMap<Centroid, List<ColorWeight>> delegateMeans(List<ColorWeight> colorsByWeight, int k) {
@@ -147,43 +171,106 @@ public class App {
         displayColors(lastMeans);
     }
 
-    public static void main(String []args) throws IOException, Exception
-    {
-        File myObj = new File("C:\\Users\\damia\\OneDrive\\Documents\\Code\\VideoAnalyser\\videos\\aoftlriri.mp4");
-        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(myObj.getAbsoluteFile());
-        frameGrabber.setFormat("mp4");
-        List<ColorWeight> colors = new ArrayList<>();
-        // frameGrabber.setFrameRate(2.0);
+    private List<ColorWeight> getColorWeights() {
+        List<ColorWeight> cws = new ArrayList<>();
+        for (Color cw : colors.keySet()) {
+            cws.add(new ColorWeight(cw, colors.get(cw)));
+        }
+        return cws;
+    }
 
+    private void processVideo(int targFPS) throws Exception {
+        StopWatch();
+        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
+        frameGrabber.setFormat("mp4");
+        // frameGrabber.setFrameRate(2.0);
+        // FFmpegLogCallback.set();
         frameGrabber.start(); 
-        System.out.println("gggppp" + frameGrabber.getFrameRate());
-        // System.out.println("gggppp" + frameGrabber.getFrameRate());
+        StopWatch("frame grabber initialised");
         Frame f; 
 
-        // boolean dog = true;
         Java2DFrameConverter c = new Java2DFrameConverter(); 
-        int o = 0;
+        int totalFrames = 0;
+        double includedFrames = 0;
+        
+        double FPSConversionRate = targFPS/frameGrabber.getFrameRate();  
+        System.out.println("fps: " + FPSConversionRate);
+
         List<Color> aveColorsInOrder = new ArrayList<>();
+        StopWatch();
+
         while ((f = frameGrabber.grab()) != null) {
-            o++;
-            if (o%2 == 0) {
-                try {
-
-                    BufferedImage bi = c.convert(f);;
-                    aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
-                    if (o%10 == 0) {
-                        System.out.println(o);
-                            // ImageIO.write(bi, "png", new File("C:\\Users\\damia\\OneDrive\\Documents\\Code\\VideoAnalyser\\videos\\photos\\riri" + o + ".png"));
-                            colors.addAll(parseImage(bi));
-                            // ImageIO.write(bi,"png", new File("C:\\Users\\damia\\OneDrive\\Documents\\Code\\Images\\banana" + p + ".jpg"));
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+            try {
+                BufferedImage bi = c.convert(f);;
+                if (bi == null) {
+                    // Audio frame, discarded
+                    // System.out.println("audio frame");
+                    continue;
                 }
-
+                // System.out.println("video frame");
+                totalFrames++;
+                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
+                if (includedFrames/totalFrames < FPSConversionRate) {
+                    addImageToColors(bi);
+                    includedFrames++;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
+        c.close();
+        StopWatch(aveColorsInOrder.size() + " frames processed");
+        StopWatch();
+        VideoDissect rect = new VideoDissect(aveColorsInOrder);
+        StopWatch("Video dissect generated");
+        JFrame window = new JFrame();
+        window.setSize(800, 800);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        window.add(rect);
+
+        window.setVisible(true);
+        StopWatch();
+        List<ColorWeight> cws = getColorWeights();
+        cws.sort(new ByHSB());
+        StopWatch("Colours sorted");
+        // findDominantColors(cws);
+        StopWatch();
+        graphColour(cws, 8);
+        StopWatch("8 colours generated");
+        frameGrabber.stop();
+    }
+
+    
+    private void processVideoDissect() throws Exception {
+        StopWatch();
+        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
+        frameGrabber.setFormat("mp4");
+        // frameGrabber.setFrameRate(2.0);
+        // FFmpegLogCallback.set();
+        frameGrabber.start(); 
+        StopWatch("frame grabber initialised");
+        Frame f; 
+
+        Java2DFrameConverter c = new Java2DFrameConverter(); 
         
+        List<Color> aveColorsInOrder = new ArrayList<>();
+
+        while ((f = frameGrabber.grab()) != null) {
+            try {
+                BufferedImage bi = c.convert(f);;
+                if (bi == null) {
+                    // Audio frame, discarded
+                    // System.out.println("audio frame");
+                    continue;
+                }
+                // System.out.println("video frame");
+                
+                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        c.close();
         VideoDissect rect = new VideoDissect(aveColorsInOrder);
         JFrame window = new JFrame();
         window.setSize(800, 800);
@@ -191,12 +278,59 @@ public class App {
         window.add(rect);
 
         window.setVisible(true);
-
-        List<ColorWeight> cws = ColorWeight.condenseWeights(colors);
-        cws.sort(new ByHSB());
-        // findDominantColors(cws);
-        graphColour(cws, 8);
+        // // List<ColorWeight> cws = getColorWeights();
+        // // cws.sort(new ByHSB());
+        // // // findDominantColors(cws);
+        // // StopWatch();
+        // // graphColour(cws, 8);
+        // StopWatch("8 colours generated");
         frameGrabber.stop();
+    }
+
+    private boolean active = false;
+    private long startime;
+    private void StopWatch(String text) {
+        if (active) {
+            active=false;
+            System.out.println(text + " in " + (System.nanoTime()-startime)/1000000000 + " seconds");
+        }
+        else {
+            active = true;
+            startime = System.nanoTime();
+        }
+    }
+
+    private void StopWatch() {
+        StopWatch("Lap done");
+    }
+    
+    public static void main(String []args) throws IOException, Exception
+    {
+        File file = new File("videos\\aotl.mp4");
+        App app = new App(file);
+
+
+        // app.StopWatch();
+        app.processVideoDissect();    //160 secs : 5.95 secs per frame
+        // app.StopWatch("Video proccessing complete");
+        
+        // app.StopWatch();
+        // app.processVideo(24);    //143 secs : 5.95 secs per frame
+        // app.StopWatch();
+
+        // app.StopWatch();
+        // app.processVideo(12);    //78 secs : 6.5 secs per frame
+        // app.StopWatch();
+        // app.StopWatch();
+        // app.processVideo(1);    //12 secs : 12 secs per frame
+        // app.StopWatch();
+        // app.StopWatch();
+        // app.processVideo(2);    //15 secs    7.5 secs
+        // app.StopWatch();
+        // app.StopWatch();
+        // app.processVideo(3);    // 22 secs   7.333
+        // app.StopWatch();    
+        
         
     }
 }

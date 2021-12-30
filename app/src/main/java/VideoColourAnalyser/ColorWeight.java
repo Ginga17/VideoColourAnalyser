@@ -5,11 +5,14 @@ import java.util.HashMap;
 import java.util.List;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 
+import java.awt.image.BufferedImage;
+
+
 
 public class ColorWeight extends Color implements Comparable<Color> {
     
     private Color colour;
-    private int weight;
+    private long weight;
     
     public ColorWeight(Color colour) {
         super(colour.getRGB());
@@ -21,12 +24,12 @@ public class ColorWeight extends Color implements Comparable<Color> {
         this.weight = 1;
     }
 
-    public ColorWeight(int colour, int weight) {
+    public ColorWeight(int colour, long weight) {
         super(colour);
         this.weight = weight;
     }
 
-    public ColorWeight(Color colour, int weight) {
+    public ColorWeight(Color colour, long weight) {
         super(colour.getRGB());
         this.weight = weight;
     }
@@ -40,14 +43,14 @@ public class ColorWeight extends Color implements Comparable<Color> {
     // }
 
     public static ColorWeight joinColours(ColorWeight cw1, ColorWeight cw2) {
-        int newWeight = cw1.getWeight() + cw2.getWeight();
-        int newRed = (cw1.getRed() * cw1.getWeight() + cw2.getRed() * cw2.getWeight())/newWeight; 
-        int newBlue = (cw1.getBlue() * cw1.getWeight() + cw2.getBlue() * cw2.getWeight())/newWeight; 
-        int newGreen = (cw1.getGreen() * cw1.getWeight() + cw2.getGreen() * cw2.getWeight())/newWeight; 
+        long newWeight = cw1.getWeight() + cw2.getWeight();
+        long newRed = (cw1.getRed() * cw1.getWeight() + cw2.getRed() * cw2.getWeight())/newWeight; 
+        long newBlue = (cw1.getBlue() * cw1.getWeight() + cw2.getBlue() * cw2.getWeight())/newWeight; 
+        long newGreen = (cw1.getGreen() * cw1.getWeight() + cw2.getGreen() * cw2.getWeight())/newWeight; 
         return new ColorWeight(new Color(newRed, newBlue, newGreen), newWeight);
     }
 
-    public int getWeight() {
+    public long getWeight() {
         return weight;
     }
 
@@ -77,17 +80,57 @@ public class ColorWeight extends Color implements Comparable<Color> {
         long red = 0;
         long green = 0;
         long blue = 0;
-        int weight = 0;
+        long weight = 0;
+        long index = 0;
         for (ColorWeight curr : colors) {
             // float[] hsb = ColorWeight.RGBtoHSB(curr.getRed(), curr.getGreen(), curr.getBlue(), null);
+            
             red += curr.getRed() * curr.getWeight();
             green += curr.getGreen() * curr.getWeight();
             blue += curr.getBlue() * curr.getWeight();
             weight += curr.getWeight();
+            // System.out.println(curr.getRed());
+            // System.out.println("g" + curr.getGreen());
+            // System.out.println(curr.getBlue());
+            if(Math.round(red/weight) > 255 || Math.round(green/weight) > 255 ||Math.round(blue/weight) > 255){
+                System.out.println("MMMMMM" + index);
+                System.out.println(red);
+
+                System.out.println(green);
+                System.out.println(blue);
+                System.out.println(weight);
+                
+                System.out.println(curr.getRed());
+
+                System.out.println(curr.getGreen());
+                System.out.println(curr.getBlue());
+                System.out.println(curr.getWeight());
+                System.exit(0);
+            }
+            index++;
+
         }
+
+        
+        System.out.println("r " + red + "g" + green + "b" + blue + "w" + weight);
         Color balancedColor = new Color(Math.round(red/weight), Math.round(green/weight), Math.round(blue/weight));
 
         return new ColorWeight(balancedColor, weight);
+    }
+
+    public static Color averageWeights(BufferedImage image) {
+        long red = 0, green = 0, blue = 0;
+        int weight = image.getWidth() * image.getHeight();
+        for (int x = 0; x <image.getWidth(); x++) {
+            for (int y = 0; y< image.getHeight(); y++) {
+                // float[] hsb = ColorWeight.RGBtoHSB(curr.getRed(), curr.getGreen(), curr.getBlue(), null);
+                Color pixel = new Color(image.getRGB(x, y));
+                red += pixel.getRed();
+                green += pixel.getGreen();
+                blue += pixel.getBlue();
+            }
+        }
+        return new Color(Math.round(red/weight),Math.round(green/weight),Math.round(blue/weight));
     }
 
     public static List<ColorWeight> condenseWeights(List<ColorWeight> colors) {
@@ -95,7 +138,7 @@ public class ColorWeight extends Color implements Comparable<Color> {
         long green = 0;
         long blue = 0;
         int weight = 0;
-        HashMap<ColorWeight,Integer> condensed = new HashMap<>();
+        HashMap<ColorWeight,Long> condensed = new HashMap<>();
         for (ColorWeight curr : colors) {
             if (condensed.containsKey(curr)) {
                 condensed.put(curr, condensed.get(curr) + curr.getWeight());

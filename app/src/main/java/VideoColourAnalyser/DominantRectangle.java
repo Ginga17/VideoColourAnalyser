@@ -22,7 +22,7 @@ public class DominantRectangle extends JPanel {
     protected HashMap<ColorWeight, Float> colorsToSize = new HashMap<>();
 
     public DominantRectangle(List<ColorWeight> colors) {
-        int totalWeight = colors.stream().mapToInt(e -> e.getWeight()).sum();
+        long totalWeight = colors.stream().mapToLong(e -> e.getWeight()).sum();
         for (ColorWeight cw : colors) {
             colorsToSize.put(cw, (float)cw.getWeight()/totalWeight);
         }

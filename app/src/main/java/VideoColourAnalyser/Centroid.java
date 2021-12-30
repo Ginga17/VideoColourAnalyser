@@ -10,7 +10,7 @@ public class Centroid {
     private float brightness;
     private Color color;
     private List<ColorWeight> cluster;
-    private int weight = 1;
+    private long weight = 1;
 
     public Centroid (List<ColorWeight> cluster) {
         this.cluster = cluster;
@@ -42,7 +42,7 @@ public class Centroid {
         brightness = Color.RGBtoHSB(color.getRed(), color.getGreen(),color.getBlue(), null)[1];
 
         color = newColor;
-        weight = newCluster.stream().mapToInt(c -> c.getWeight()).sum();
+        weight = newCluster.stream().mapToLong(c -> c.getWeight()).sum();
         return true;
     }
 

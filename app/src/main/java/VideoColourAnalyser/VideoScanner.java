@@ -5,8 +5,10 @@ package VideoColourAnalyser;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.Buffer;
 import java.util.ArrayList;
@@ -15,15 +17,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import java.awt.BorderLayout;
+
+
 import javax.imageio.ImageIO;
 import javax.swing.Action;
 import javax.swing.JFrame;
 
+import com.google.common.base.Stopwatch;
+
 import org.bytedeco.ffmpeg.avutil.LogCallback;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.Java2DFrameConverter;
-
+import org.bytedeco.librealsense.frame;
+import org.opencv.video.Video;
 import org.bytedeco.javacv.FFmpegLogCallback;
 
 
@@ -40,12 +49,13 @@ public class VideoScanner implements java.io.Serializable{
     private File file;
     // All the colours used in the video, and the number of pixels of that colour
     private HashMap<Color, Integer> colors = new HashMap<>();
-    private int fps = 0;
+    private double fps = 0;
     // Lists the average colour of each frame of the video in order
     private List<Color> aveColorsInOrder = null;
-    // The calculated dominant colours in the image that can be found after processing
-    private List<ColorWeight> dominantColours = null;
+    // // The calculated dominant colours in the image that can be found after processing
+    // private ArrayList<ColorWeight> dominantColours = null;
 
+    private static final long serialVersionUID = 1111111;
 
     public VideoScanner(File file) {
         this.file = file;
@@ -57,70 +67,71 @@ public class VideoScanner implements java.io.Serializable{
         if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
             fileName = fileName.substring(0, pos);
         }
-        return file.getName();
+        return fileName;
+    }
+
+    public double getFps() {
+        return fps;
     }
 
     
-    private void processVideo(int targFPS) throws Exception {
-        fps = targFPS;
-        StopWatch();
+    private void processVideo(int targFPS) throws FFmpegFrameGrabber.Exception {
+        // StopWatch();
         FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
         frameGrabber.setFormat("mp4");
         // frameGrabber.setFrameRate(2.0);
         // FFmpegLogCallback.set();
         frameGrabber.start(); 
-        StopWatch("frame grabber initialised");
+
+        if (targFPS > frameGrabber.getFrameRate()) {
+            fps = frameGrabber.getFrameRate();
+        }
+        else {
+            fps = targFPS;
+        }
         Frame f; 
+        System.out.println("frame rate is " + frameGrabber.getVideoFrameRate() + " with " + frameGrabber.getLengthInVideoFrames());
 
         Java2DFrameConverter c = new Java2DFrameConverter(); 
         int totalFrames = 0;
         double includedFrames = 0;
         
         // The ratio of frames to be included to the base frame rate of the video.
-        double FPSConversionRate = targFPS/frameGrabber.getFrameRate();  
-        System.out.println("fps: " + FPSConversionRate);
-        List<Color> aveColorsInOrder = new ArrayList<>();
-
-        StopWatch();
+        double FPSConversionRate = targFPS/frameGrabber.getFrameRate();
+        aveColorsInOrder = new ArrayList<>();
+        // StopWatch("Initialisation done");
 
         while ((f = frameGrabber.grab()) != null) {
             try {
+                // StopWatch();
                 BufferedImage bi = c.convert(f);;
+                // StopWatch("Converted and checked");
+
                 if (bi == null) {
-                    // Audio frame, discarded
-                    // System.out.println("audio frame");
                     continue;
                 }
-                // System.out.println("video frame");
                 totalFrames++;
-                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
+                // StopWatch();
+                aveColorsInOrder.add(ColorWeight.averageWeights(bi));
+                // StopWatch("lemons");
+                // StopWatch("average Color added");
                 if (includedFrames/totalFrames < FPSConversionRate) {
+                    // StopWatch();
+                    // StopWatch();
                     addImageToColors(bi);
+                    // StopWatch("orange");
+                    // StopWatch("Colours added to total");
                     includedFrames++;
+                    // System.out.println(includedFrames + "SSSSS");
+                    if (includedFrames % Math.round(fps)* 3 == 0) {
+                        System.out.println(totalFrames + "/" + frameGrabber.getLengthInVideoFrames());
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
         c.close();
-        StopWatch(aveColorsInOrder.size() + " frames processed");
-        StopWatch();
-        VideoDissect rect = new VideoDissect(aveColorsInOrder);
-        StopWatch("Video dissect generated");
-        JFrame window = new JFrame();
-        window.setSize(800, 800);
-        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        window.add(rect);
-
-        window.setVisible(true);
-        StopWatch();
-        List<ColorWeight> cws = getColorWeights();
-        cws.sort(new ByHSB());
-        StopWatch("Colours sorted");
-        // findDominantColors(cws);
-        StopWatch();
-        graphColour(cws, 8);
-        StopWatch("8 colours generated");
         frameGrabber.stop();
     }
 
@@ -161,100 +172,16 @@ public class VideoScanner implements java.io.Serializable{
         }
     }
 
-    private static HashMap<Centroid, List<ColorWeight>> delegateMeans(List<ColorWeight> colorsByWeight, int k) {
-        // System.out.println("sorting");
-        // colorsByWeight.sort(new ByHSB());
-        HashMap<Centroid, List<ColorWeight>> meansToClusters = new HashMap<>();
-        System.out.println("Initialising");
-        // for (i = 0; i<colorsByWeight.size(); i += (colorsByWeight.size()/numOfDom)) {
-        // for (int i = 0; i<k; i += 1) {
-        //     meansToClusters.put(new Centroid( Arrays.asList(colorsByWeight.get(i * colorsByWeight.size()/ k))), new ArrayList<>());
-        // }
-        for (int i = 0; i<k; i += 1) {
-            List<ColorWeight> currCol = new ArrayList<>();
-            for (int p = i*colorsByWeight.size()/k; p<(i+1)*colorsByWeight.size()/k; p += 1) {
-                currCol.add(colorsByWeight.get(p));
-            }
-            meansToClusters.put(new Centroid(currCol), currCol);
-        }
-        return meansToClusters;
-    }
-
-    private static List<Centroid> kMeansCluster(List<ColorWeight> colorsByWeight, int k) {
-        HashMap<Centroid, List<ColorWeight>> meansToClusters = new HashMap<>();
-        // HashMap<Centroid, List<ColorWeight>> rearrangedClusters = new HashMap<>();
-        meansToClusters = delegateMeans(colorsByWeight, k);
-        // meansToClusters = randMeansToClusters(colorsByWeight, k);
-        // meansToClusters = forgyMeansToClusters(colorsByWeight, k);
-        
-        // Here, we need initial means to be set
-        while (true)
-        {
-            // Assign clusters
-            for (ColorWeight curr: colorsByWeight) {
-                float dist = 0;
-                Centroid closest = null;
-                for(Centroid key : meansToClusters.keySet()) {
-                    if(closest == null || key.distFromColor(curr) < dist) {
-                        dist = key.distFromColor(curr);
-                        closest = key;
-                    }
-                }
-                meansToClusters.get(closest).add(curr);
-            }
- 
-            boolean noChange = true;
-            for (Centroid c : meansToClusters.keySet()) {
-                if (c.recalculateCentroid(meansToClusters.get(c))) {
-                    noChange = false;
-                }
-            }
-            if (noChange) {
-                break;
-            }
-        }
-        return new ArrayList<>(meansToClusters.keySet());
-    }
-
-    private static void graphColour(List<ColorWeight> colors,int k) {
-        
-        List<Centroid> centroids = kMeansCluster(colors,k);
-        List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
-        displayColors(means);
-
-    }
-
-    private static void displayColors(List<ColorWeight> means) {
-        DominantRectangle rect = new DominantRectangle(means);
+    private void displayDissect() {
+        VideoDissect rect = new VideoDissect(aveColorsInOrder);
         JFrame window = new JFrame();
-        window.setSize(800, 800);
+        window.setLayout(new BorderLayout());
+        window.getContentPane().add(rect);
+        window.pack();
+        // window.setSize(200, 200);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        window.add(rect);
 
         window.setVisible(true);
-    }
-
-    private void findDominantColors(List<ColorWeight> colorsByWeight) {
-        
-        List<Centroid> centroids = kMeansCluster(colorsByWeight,5);
-
-        List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
-        List<ColorWeight> lastMeans = means;
-        double dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum(); 
-        double lastDistance = 2*dist;
-        // for (int k=2; k<12; k++) {
-        int k = 6;
-        while(lastDistance * 0.85 > dist) {
-        // while(lastDistance/ dist > 1.15) {
-            lastDistance = dist;
-            centroids = kMeansCluster(colorsByWeight,k);
-            lastMeans = means;
-            means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
-            dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum();
-            k++;
-        }
-        dominantColours = lastMeans;
-        displayColors(dominantColours);
     }
 
     private List<ColorWeight> getColorWeights() {
@@ -265,86 +192,109 @@ public class VideoScanner implements java.io.Serializable{
         return cws;
     }
 
+    private static VideoScanner deserialiseVideoData(String fileName) {
+        VideoScanner vs = null;
+        try {
+            FileInputStream fileIn = new FileInputStream("VideoData/" + fileName + ".ser");
+            ObjectInputStream in = new ObjectInputStream(fileIn);
+            vs = (VideoScanner) in.readObject();
+            in.close();
+            fileIn.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return vs;
+    }
 
-    
-    private void processVideoDissect() throws Exception {
-        StopWatch();
-        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
-        frameGrabber.setFormat("mp4");
-        // frameGrabber.setFrameRate(2.0);
-        // FFmpegLogCallback.set();
-        frameGrabber.start(); 
-        StopWatch("frame grabber initialised");
-        Frame f; 
-
-        Java2DFrameConverter c = new Java2DFrameConverter(); 
+    // returns how many seconds it took
+    private static long serialiseVideo(String filename, int frameRate) throws FFmpegFrameGrabber.Exception {
+        VideoScanner app = new VideoScanner(new File("films\\" + filename + ".mp4"));
+        long startime = System.nanoTime();
+        app.processVideo(frameRate);
+        long timeTaken = (System.nanoTime() - startime)/1000000000;
+        System.out.println("Video processed in " + timeTaken + " seconds");
         
-        List<Color> aveColorsInOrder = new ArrayList<>();
+        // Serialise
+        try {
+            FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFileName() + "_" + Math.round(app.getFps()) + "fps.ser");
+            ObjectOutputStream out = new ObjectOutputStream(outputFile);
 
-        while ((f = frameGrabber.grab()) != null) {
-            try {
-                BufferedImage bi = c.convert(f);;
-                if (bi == null) {
-                    // Audio frame, discarded
-                    // System.out.println("audio frame");
-                    continue;
-                }
-                // System.out.println("video frame");
-                
-                aveColorsInOrder.add(ColorWeight.averageWeights(parseImage(bi)));
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            // Method for serialization of object
+            out.writeObject(app);
+
+            out.close();
+            outputFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        c.close();
-        VideoDissect rect = new VideoDissect(aveColorsInOrder);
-        JFrame window = new JFrame();
-        window.setSize(800, 800);
-        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        window.add(rect);
-
-        window.setVisible(true);
-        // // List<ColorWeight> cws = getColorWeights();
-        // // cws.sort(new ByHSB());
-        // // // findDominantColors(cws);
-        // // StopWatch();
-        // // graphColour(cws, 8);
-        // StopWatch("8 colours generated");
-        frameGrabber.stop();
+        return timeTaken;
     }
 
-    private boolean active = false;
-    private long startime;
-    private void StopWatch(String text) {
-        if (active) {
-            active=false;
-            System.out.println(text + " in " + (System.nanoTime()-startime)/1000000000 + " seconds");
-        }
-        else {
-            active = true;
-            startime = System.nanoTime();
-        }
-    }
+    // private boolean active = false;
+    // private long startime;
+    // private void StopWatch(String text) {
+    //     if (active) {
+    //         active=false;
+            
+    //         ///1000000000
+    //         System.out.println(text + " in " + (System.nanoTime()-startime)/1000000000 + " seconds");
+    //     }
+    //     else {
+    //         active = true;
+    //         startime = System.nanoTime();
+    //     }
+    // }
 
-    private void StopWatch() {
-        StopWatch("Lap done");
-    }
+    // private void StopWatch() {
+    //     StopWatch("Lap done");
+    // }
     
     public static void main(String []args) throws IOException, Exception
     {
-        File file = new File("videos\\All_of_the_Lights.mp4");
-        VideoScanner app = new VideoScanner(file);
+        //If this pathname does not denote a directory, then listFiles() returns null. 
 
-        app.processVideo(24);   //160 secs : 5.95 secs per frame
+        // for (File file : new File("films").listFiles()) {
+        //     if (file.isFile()) {
+                // System.out.print("Reading " + file.getName());
+        // VideoScanner app = new VideoScanner(new File("videos\\All_of_the_Lights.mp4"));
+        // // app.StopWatch();
+        // app.processVideo(6);   //160 secs : 5.95 secs per frame
+        // app.StopWatch("banana");
+        // serialiseVideo("Guardians_of_the_Galaxy", 24);
+        // serialiseVideo("Star_Wars_The_Last_Jedi", 24);
+        // serialiseVideo("Deadpool", 24);
+        // serialiseVideo("Kung_Fu_Panda", 24);
+        // DominantMapper dm = new DominantMapper();
+        // DominantMapper.graphColour(deserialiseVideoData("The_Grinch_24fps").getColorWeights(), 8);
+        // deserialiseVideoData("The_Lorax_24fps").displayDissect();
         
-        FileOutputStream outputFile = new FileOutputStream(app.getFileName());
-        ObjectOutputStream out = new ObjectOutputStream(outputFile);
+        // deserialiseVideoData("Ice_Age_24fps").displayDissect();
+        // deserialiseVideoData("Ice_Age_12fps").displayDissect();
 
-        // Method for serialization of object
-        out.writeObject(out);
+        // VideoScanner app = VideoScanner.deserialiseVideoData("All_of_the_Lights_24fps");
+        // System.out.println((System.nanoTime() - startime)/1000000000);
+        // startime = System.nanoTime();
+        // app.displayDissect();
+        // System.out.println((System.nanoTime() - startime)/1000000000);
+        
+        // app.StopWatch("object saved");
 
-        out.close();
-        outputFile.close();
+        // FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFileName() + "_" + Math.round(app.getFps()) + "fps.ser");
+        // ObjectOutputStream out = new ObjectOutputStream(outputFile);
+
+        // // Method for serialization of object
+        // out.writeObject(app);
+
+        // out.close();
+        // outputFile.close();
+        // app.StopWatch("object saved");
+        //     }
+        // }
+        // FileInputStream fileIn = new FileInputStream("/ColourData/app.getFileName.ser");
+        // ObjectInputStream in = new ObjectInputStream(fileIn);
+        // VideoScanner e = (VideoScanner) in.readObject();
+        // in.close();
+        // fileIn.close();
 
         // app.StopWatch();
         // app.processVideo(24);    //143 secs : 5.95 secs per frame

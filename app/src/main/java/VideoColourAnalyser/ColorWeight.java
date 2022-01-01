@@ -3,7 +3,6 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import org.bytedeco.javacv.FFmpegFrameGrabber;
 
 import java.awt.image.BufferedImage;
 
@@ -89,30 +88,11 @@ public class ColorWeight extends Color implements Comparable<Color> {
             green += curr.getGreen() * curr.getWeight();
             blue += curr.getBlue() * curr.getWeight();
             weight += curr.getWeight();
-            // System.out.println(curr.getRed());
-            // System.out.println("g" + curr.getGreen());
-            // System.out.println(curr.getBlue());
-            if(Math.round(red/weight) > 255 || Math.round(green/weight) > 255 ||Math.round(blue/weight) > 255){
-                System.out.println("MMMMMM" + index);
-                System.out.println(red);
-
-                System.out.println(green);
-                System.out.println(blue);
-                System.out.println(weight);
-                
-                System.out.println(curr.getRed());
-
-                System.out.println(curr.getGreen());
-                System.out.println(curr.getBlue());
-                System.out.println(curr.getWeight());
-                System.exit(0);
-            }
+    
             index++;
 
         }
 
-        
-        System.out.println("r " + red + "g" + green + "b" + blue + "w" + weight);
         Color balancedColor = new Color(Math.round(red/weight), Math.round(green/weight), Math.round(blue/weight));
 
         return new ColorWeight(balancedColor, weight);

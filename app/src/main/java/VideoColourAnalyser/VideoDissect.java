@@ -30,17 +30,6 @@ public class VideoDissect extends JPanel {
         }
         img = bufferedImage;
     }
-
-    // protected void paintComponent(Graphics g) {
-    //     int x = 0;
-    //     for (Color c : colors) {
-
-    //         g.setColor(c);
-    //         g.fillRect(x, 0, 1, 500);
-    //         x++;
-    //     }
-    // }
-
     
 
     @Override

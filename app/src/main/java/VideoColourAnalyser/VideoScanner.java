@@ -3,45 +3,25 @@
  */
 package VideoColourAnalyser;
 
-import java.io.BufferedInputStream;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.nio.Buffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import java.awt.BorderLayout;
-
-
-import javax.imageio.ImageIO;
-import javax.swing.Action;
 import javax.swing.JFrame;
 
-import com.google.common.base.Stopwatch;
-
-import org.bytedeco.ffmpeg.avutil.LogCallback;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
-import org.bytedeco.javacv.FrameGrabber;
 import org.bytedeco.javacv.Java2DFrameConverter;
-import org.bytedeco.librealsense.frame;
-import org.opencv.video.Video;
-import org.bytedeco.javacv.FFmpegLogCallback;
-
-
-
-
-import java.awt.Color;
-
-
-import java.awt.image.BufferedImage;
 
 public class VideoScanner implements java.io.Serializable{
     
@@ -184,7 +164,14 @@ public class VideoScanner implements java.io.Serializable{
         window.setVisible(true);
     }
 
-    private List<ColorWeight> getColorWeights() {
+    private void graphDoms(int k) {
+        DominantMapper dm = new DominantMapper(this.getColorWeights());
+        dm.graphColour(k);
+    }
+
+
+
+    public List<ColorWeight> getColorWeights() {
         List<ColorWeight> cws = new ArrayList<>();
         for (Color cw : colors.keySet()) {
             cws.add(new ColorWeight(cw, colors.get(cw)));
@@ -206,9 +193,23 @@ public class VideoScanner implements java.io.Serializable{
         return vs;
     }
 
+    private static VideoScanner deserialiseVideoData(String fileName, int fps) {
+        VideoScanner vs = null;
+        try {
+            FileInputStream fileIn = new FileInputStream("VideoData/" + fileName + "_" + fps + "fps.ser");
+            ObjectInputStream in = new ObjectInputStream(fileIn);
+            vs = (VideoScanner) in.readObject();
+            in.close();
+            fileIn.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return vs;
+    }
+
     // returns how many seconds it took
     private static long serialiseVideo(String filename, int frameRate) throws FFmpegFrameGrabber.Exception {
-        VideoScanner app = new VideoScanner(new File("films\\" + filename + ".mp4"));
+        VideoScanner app = new VideoScanner(new File("filmsy\\" + filename));
         long startime = System.nanoTime();
         app.processVideo(frameRate);
         long timeTaken = (System.nanoTime() - startime)/1000000000;
@@ -230,89 +231,12 @@ public class VideoScanner implements java.io.Serializable{
         return timeTaken;
     }
 
-    // private boolean active = false;
-    // private long startime;
-    // private void StopWatch(String text) {
-    //     if (active) {
-    //         active=false;
-            
-    //         ///1000000000
-    //         System.out.println(text + " in " + (System.nanoTime()-startime)/1000000000 + " seconds");
-    //     }
-    //     else {
-    //         active = true;
-    //         startime = System.nanoTime();
-    //     }
-    // }
-
-    // private void StopWatch() {
-    //     StopWatch("Lap done");
-    // }
-    
     public static void main(String []args) throws IOException, Exception
     {
-        //If this pathname does not denote a directory, then listFiles() returns null. 
-
-        // for (File file : new File("films").listFiles()) {
-        //     if (file.isFile()) {
-                // System.out.print("Reading " + file.getName());
-        // VideoScanner app = new VideoScanner(new File("videos\\All_of_the_Lights.mp4"));
-        // // app.StopWatch();
-        // app.processVideo(6);   //160 secs : 5.95 secs per frame
-        // app.StopWatch("banana");
-        // serialiseVideo("Guardians_of_the_Galaxy", 24);
-        // serialiseVideo("Star_Wars_The_Last_Jedi", 24);
-        // serialiseVideo("Deadpool", 24);
-        // serialiseVideo("Kung_Fu_Panda", 24);
-        // DominantMapper dm = new DominantMapper();
-        // DominantMapper.graphColour(deserialiseVideoData("The_Grinch_24fps").getColorWeights(), 8);
-        // deserialiseVideoData("The_Lorax_24fps").displayDissect();
         
-        // deserialiseVideoData("Ice_Age_24fps").displayDissect();
-        // deserialiseVideoData("Ice_Age_12fps").displayDissect();
-
-        // VideoScanner app = VideoScanner.deserialiseVideoData("All_of_the_Lights_24fps");
-        // System.out.println((System.nanoTime() - startime)/1000000000);
-        // startime = System.nanoTime();
-        // app.displayDissect();
-        // System.out.println((System.nanoTime() - startime)/1000000000);
-        
-        // app.StopWatch("object saved");
-
-        // FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFileName() + "_" + Math.round(app.getFps()) + "fps.ser");
-        // ObjectOutputStream out = new ObjectOutputStream(outputFile);
-
-        // // Method for serialization of object
-        // out.writeObject(app);
-
-        // out.close();
-        // outputFile.close();
-        // app.StopWatch("object saved");
-        //     }
-        // }
-        // FileInputStream fileIn = new FileInputStream("/ColourData/app.getFileName.ser");
-        // ObjectInputStream in = new ObjectInputStream(fileIn);
-        // VideoScanner e = (VideoScanner) in.readObject();
-        // in.close();
-        // fileIn.close();
-
-        // app.StopWatch();
-        // app.processVideo(24);    //143 secs : 5.95 secs per frame
-        // app.StopWatch();
-
-        // app.StopWatch();
-        // app.processVideo(12);    //78 secs : 6.5 secs per frame
-        // app.StopWatch();
-        // app.StopWatch();
-        // app.processVideo(1);    //12 secs : 12 secs per frame
-        // app.StopWatch();
-        // app.StopWatch();
-        // app.processVideo(2);    //15 secs    7.5 secs
-        // app.StopWatch();
-        // app.StopWatch();
-        // app.processVideo(3);    // 22 secs   7.333
-        // app.StopWatch();    
-        
-        
+        DominantMapper dm = new DominantMapper(deserialiseVideoData("The_Grinch", 24));
+        for (int i=2; i< 15; i++) {
+            dm.graphColour(i);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package VideoColourAnalyser;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.awt.Color;
 
@@ -55,8 +56,22 @@ public class Centroid {
 
     }
 
+    public List<ColorWeight> getCluster() {
+        return cluster;
+    }
+
     public ColorWeight getColorWeight() {
         return ColorWeight.averageWeights(cluster);
+    }
+
+    public static List<Centroid> splitCentroid(List<Centroid> centroids) {
+        Centroid target = centroids.stream().max(Comparator.comparingDouble(c -> c.sumDistanceFromMean()/ c.getColorWeight().getWeight())).get();
+        centroids.remove(target);
+        List<ColorWeight> cluster = target.getCluster();
+        cluster.sort(new ByHSB());
+        centroids.add(new Centroid(cluster.subList(0, cluster.size()/2)));
+        centroids.add(new Centroid(cluster.subList(cluster.size()/2, cluster.size())));
+        return centroids;
     }
 
 

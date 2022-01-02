@@ -22,6 +22,7 @@ import javax.swing.JFrame;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
+import org.opencv.video.Video;
 
 public class VideoScanner implements java.io.Serializable{
     
@@ -233,10 +234,12 @@ public class VideoScanner implements java.io.Serializable{
 
     public static void main(String []args) throws IOException, Exception
     {
+        DominantMapper dm = new DominantMapper(deserialiseVideoData("The_Grinch",24));
+        dm.findDominantColors2();
+        // dm.graphColour(29);
+        // dm.graphColour(8);
         
-        DominantMapper dm = new DominantMapper(deserialiseVideoData("The_Grinch", 24));
-        for (int i=2; i< 15; i++) {
-            dm.graphColour(i);
-        }
+        // serialiseVideo("Wreck_it_Ralph.mp4", 24);
+        // serialiseVideo("Zootopia.mp4", 24);
     }
 }

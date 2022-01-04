@@ -64,6 +64,10 @@ public class Centroid {
         return ColorWeight.averageWeights(cluster);
     }
 
+    public long getWeight() {
+        return weight;
+    }
+
     public static List<Centroid> splitCentroid(List<Centroid> centroids) {
         Centroid target = centroids.stream().max(Comparator.comparingDouble(c -> c.sumDistanceFromMean()/ c.getColorWeight().getWeight())).get();
         centroids.remove(target);

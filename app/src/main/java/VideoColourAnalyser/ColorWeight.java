@@ -80,19 +80,15 @@ public class ColorWeight extends Color implements Comparable<Color> {
         long green = 0;
         long blue = 0;
         long weight = 0;
-        long index = 0;
+        
         for (ColorWeight curr : colors) {
             // float[] hsb = ColorWeight.RGBtoHSB(curr.getRed(), curr.getGreen(), curr.getBlue(), null);
             
-            red += curr.getRed() * curr.getWeight();
-            green += curr.getGreen() * curr.getWeight();
-            blue += curr.getBlue() * curr.getWeight();
-            weight += curr.getWeight();
-    
-            index++;
-
+            red += (curr.getRed() * curr.getWeight());
+            green += (curr.getGreen() * curr.getWeight());
+            blue += (curr.getBlue() * curr.getWeight());
+            weight += curr.getWeight();    
         }
-
         Color balancedColor = new Color(Math.round(red/weight), Math.round(green/weight), Math.round(blue/weight));
 
         return new ColorWeight(balancedColor, weight);

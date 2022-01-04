@@ -12,7 +12,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +31,28 @@ import org.opencv.video.Video;
 public class VideoScanner implements java.io.Serializable{
     
     // The video to be scanned
-    private File file;
+    // private File file;
+
+    private String filmname;
+
+    public String getFileName(String fileName) {
+        int pos = fileName.lastIndexOf(".");
+        if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
+            fileName = fileName.substring(0, pos);
+        }
+        return fileName;
+    }
+
+
+    public void setFilmname(String filename) {        
+        this.filmname = filename;
+        System.out.println(filmname);
+    }
+
+    public String getFilmname() {
+        return filmname;
+    }
+
     // All the colours used in the video, and the number of pixels of that colour
     private HashMap<Color, Integer> colors = new HashMap<>();
     private double fps = 0;
@@ -38,27 +63,29 @@ public class VideoScanner implements java.io.Serializable{
 
     private static final long serialVersionUID = 1111111;
 
-    public VideoScanner(File file) {
-        this.file = file;
+    public VideoScanner(String filename) {
+        this.filmname = filename;
     }
 
-    public String getFileName() {
-        String fileName = file.getName();
-        int pos = fileName.lastIndexOf(".");
-        if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
-            fileName = fileName.substring(0, pos);
-        }
-        return fileName;
-    }
+    // public String getFileName() {
+    //     String fileName = file.getName();
+    //     int pos = fileName.lastIndexOf(".");
+    //     if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
+    //         fileName = fileName.substring(0, pos);
+    //     }
+    //     return fileName;
+    // }
 
     public double getFps() {
         return fps;
     }
 
     
+
+    
     private void processVideo(int targFPS) throws FFmpegFrameGrabber.Exception {
         // StopWatch();
-        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber(file.getAbsoluteFile());
+        FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber("films/" + filmname + ".mp4");
         frameGrabber.setFormat("mp4");
         // frameGrabber.setFrameRate(2.0);
         // FFmpegLogCallback.set();
@@ -153,8 +180,9 @@ public class VideoScanner implements java.io.Serializable{
         }
     }
 
-    private void displayDissect() {
+    private void formDissect() throws IOException {
         VideoDissect rect = new VideoDissect(aveColorsInOrder);
+        rect.save("VideoData/" + filmname + "/Dissect.png");
         JFrame window = new JFrame();
         window.setLayout(new BorderLayout());
         window.getContentPane().add(rect);
@@ -166,7 +194,7 @@ public class VideoScanner implements java.io.Serializable{
     }
 
     private void graphDoms(int k) {
-        DominantMapper dm = new DominantMapper(this.getColorWeights());
+        DominantMapper dm = new DominantMapper(this.getColorWeights(), filmname);
         dm.graphColour(k);
     }
 
@@ -197,7 +225,7 @@ public class VideoScanner implements java.io.Serializable{
     private static VideoScanner deserialiseVideoData(String fileName, int fps) {
         VideoScanner vs = null;
         try {
-            FileInputStream fileIn = new FileInputStream("VideoData/" + fileName + "_" + fps + "fps.ser");
+            FileInputStream fileIn = new FileInputStream("VideoData/" + fileName + "/" + fileName + "_" + fps + "fps.ser");
             ObjectInputStream in = new ObjectInputStream(fileIn);
             vs = (VideoScanner) in.readObject();
             in.close();
@@ -208,9 +236,27 @@ public class VideoScanner implements java.io.Serializable{
         return vs;
     }
 
+    private void findAndSaveDoms() throws IOException {
+        DominantMapper dm = new DominantMapper(this);
+        dm.findDominantColors2();
+        dm.save();
+    }   
+
+    /**
+     * Ensures that the film has a folder stored in VideoData
+     */
+    private void ensureDirExists() {
+        Path path = Paths.get("VideoData/" + this.filmname);
+        if (Files.notExists(path)) {
+            File f = new File("VideoData");  
+		    f.mkdir(); 
+        }
+
+    }
+
     // returns how many seconds it took
     private static long serialiseVideo(String filename, int frameRate) throws FFmpegFrameGrabber.Exception {
-        VideoScanner app = new VideoScanner(new File("filmsy\\" + filename));
+        VideoScanner app = new VideoScanner(filename);
         long startime = System.nanoTime();
         app.processVideo(frameRate);
         long timeTaken = (System.nanoTime() - startime)/1000000000;
@@ -218,7 +264,8 @@ public class VideoScanner implements java.io.Serializable{
         
         // Serialise
         try {
-            FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFileName() + "_" + Math.round(app.getFps()) + "fps.ser");
+            app.ensureDirExists();
+            FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFilmname() + "\\" + app.getFilmname() + "_" + Math.round(app.getFps()) + "fps.ser");
             ObjectOutputStream out = new ObjectOutputStream(outputFile);
 
             // Method for serialization of object
@@ -234,12 +281,48 @@ public class VideoScanner implements java.io.Serializable{
 
     public static void main(String []args) throws IOException, Exception
     {
-        DominantMapper dm = new DominantMapper(deserialiseVideoData("The_Grinch",24));
-        dm.findDominantColors2();
-        // dm.graphColour(29);
-        // dm.graphColour(8);
+        // serialiseVideo("Zootopia", 24);
+        // serialiseVideo("All_of_the_Lights", 24);
+        // DominantMapper dm = new DominantMapper(deserialiseVideoData("All_of_the_Lights",3));
+    
+        // for (File film : new File("VideoData").listFiles()) {
+        //     System.out.println(film.getName());
+        // }
         
-        // serialiseVideo("Wreck_it_Ralph.mp4", 24);
-        // serialiseVideo("Zootopia.mp4", 24);
+        
+        // System.out.println("Kung_Fu_Panda");
+        // deserialiseVideoData("Kung_Fu_Panda",24).formDissect();
+
+        
+        System.out.println("The_Grinch");
+        deserialiseVideoData("The_Grinch",24).findAndSaveDoms();
+
+        
+        System.out.println("The_Hunger_Games");
+        deserialiseVideoData("The_Hunger_Games",24).findAndSaveDoms();
+
+        System.out.println("The_Irishmen");
+        deserialiseVideoData("The_Irishmen",24).findAndSaveDoms();
+
+        System.out.println("Wreck_it_Ralph");
+        deserialiseVideoData("Wreck_it_Ralph",24).findAndSaveDoms();
+
+        //     System.out.println(film.getName());
+        //     VideoScanner app = deserialiseVideoData(film.getName(),24);
+        //     app.setFilmname(film.getName());
+        //     FileOutputStream outputFile = new FileOutputStream(film + "\\" + app.getFilmname() + "_" + Math.round(app.getFps()) + "fps.ser");
+        //     ObjectOutputStream out = new ObjectOutputStream(outputFile);
+
+        //     // Method for serialization of object
+        //     out.writeObject(app);
+
+        //     out.close();
+        //     outputFile.close();
+        // }
+        // File dir = new File("VideoData");
+        // for(File file : dir.listFiles()) {
+        //     File curr = new File("VideoData/" + file.getName().substring(0, file.getName().length()-10));
+        //     curr.mkdir();
+        // }
     }
 }

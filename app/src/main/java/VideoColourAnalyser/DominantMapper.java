@@ -10,21 +10,25 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.io.IOException;
+
 import javax.swing.JFrame;
 
 public class DominantMapper {
     
 
     private List<ColorWeight> colors;
-    public DominantMapper(List<ColorWeight> colors) {
+    private String filmname;
+    public DominantMapper(List<ColorWeight> colors, String filmname) {
         this.colors = colors;
         this.colors.sort(new ByHSB());
+        this.filmname = filmname;
     }
 
     public DominantMapper(VideoScanner vs) {
         this.colors = vs.getColorWeights();
         this.colors.sort(new ByHSB());
-        System.out.println("Hue difference = " + (colors.get(colors.size()-1).getHue()-colors.get(0).getHue()));
+        this.filmname = vs.getFilmname();
     }
 
     private HashMap<Centroid, List<ColorWeight>> initialiseCentroids(int k) {
@@ -37,6 +41,15 @@ public class DominantMapper {
             }
             meansToClusters.put(new Centroid(currCol), currCol);
         }
+        return meansToClusters;
+    }
+
+    private HashMap<Centroid, List<ColorWeight>> initialiseCentroidsX(int k) {
+        HashMap<Centroid, List<ColorWeight>> meansToClusters = new HashMap<>();
+        System.out.println("Initialising");
+        meansToClusters.put(new Centroid(Arrays.asList(colors.get(0))), new ArrayList<>());
+        meansToClusters.put(new Centroid(Arrays.asList(colors.get(colors.size() - 1))), new ArrayList<>());
+
         return meansToClusters;
     }
 
@@ -104,8 +117,6 @@ public class DominantMapper {
     private List<Centroid> kMeansCluster(int k) {
         HashMap<Centroid, List<ColorWeight>> meansToClusters = new HashMap<>();
         meansToClusters = initialiseCentroids(k);
-        // meansToClusters = partitionAveMeans(k);
-        // meansToClusters = randAverageMeans(k);
         
         while (true)
         {
@@ -166,13 +177,12 @@ public class DominantMapper {
 
     public void graphColour(int k) {
         List<Centroid> centroids = kMeansCluster(k);
-        List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
-        displayColors(means);
+        displayColors(centroids);
         System.out.println("k = " + k + ": " + centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum());
 
     }
 
-    private static void displayColors(List<ColorWeight> means) {
+    private static void displayColors(List<Centroid> means) {
         DominantRectangle rect = new DominantRectangle(means);
         JFrame window = new JFrame();
         window.setLayout(new BorderLayout());
@@ -183,9 +193,14 @@ public class DominantMapper {
         window.setVisible(true);
     }
 
+    private List<Centroid> domColours;
+    public void save() throws IOException {
+        new DominantRectangle(domColours).save(filmname);
+    }
+
     public void findDominantColors() {
         List<Centroid> centroids = kMeansCluster(4);
-
+        List<Centroid> lastCentroids = null;
         List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
         List<ColorWeight> lastMeans = means;
         double dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum(); 
@@ -194,18 +209,19 @@ public class DominantMapper {
         while(lastDistance * 0.85 > dist) {
         // while(lastDistance/ dist > 1.15) {
             lastDistance = dist;
+            lastCentroids = centroids;
             centroids = kMeansCluster(k);
-            lastMeans = means;
-            means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
             dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum();
             k++;
         }
         System.out.println("MMMMMMMMMMMOOOOOOOOOOOOOOOOO" + k);
-        displayColors(lastMeans);
+        domColours = lastCentroids;
+        displayColors(lastCentroids);
     }
 
     public void findDominantColors2() {
         List<Centroid> centroids = kMeansCluster(2);
+        List<Centroid> lastCentroids = null;
 
         List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
         List<ColorWeight> lastMeans = means;
@@ -213,18 +229,21 @@ public class DominantMapper {
         double lastDistance = dist*2;
         // System.out.println("k = 4: " + centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum());        
         while(dist/lastDistance < 0.95) {
-            System.out.println("PPPPPPPP");
+            System.out.println("PPPPPPPP" + centroids.size());
             lastDistance = dist;
+            lastCentroids = centroids;
             centroids = kMeansCluster(centroids);
-            lastMeans = means;
-            means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
             dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum();
             // System.out.println("k = " + k + ": " + centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum());
             // System.out.println("ratio = " + dist/lastDistance);
 
         }
-        displayColors(lastMeans);
+        System.out.println("k = " + (centroids.size() - 1) + ": " + lastDistance);
+        System.out.println("ratio = " + dist/lastDistance);
+        domColours = lastCentroids;
+        displayColors(lastCentroids);
     }
+
 
 
 }

@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +25,6 @@ import javax.swing.JFrame;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
-import org.opencv.video.Video;
 
 public class VideoScanner implements java.io.Serializable{
     
@@ -66,29 +64,36 @@ public class VideoScanner implements java.io.Serializable{
     public VideoScanner(String filename) {
         this.filmname = filename;
     }
+    
+    private int max(int val) {
+        if (val > 359) {
+            return 0;
+        }
+        else {
+            return val;
+        }
+    }
 
-    // public String getFileName() {
-    //     String fileName = file.getName();
-    //     int pos = fileName.lastIndexOf(".");
-    //     if (pos > 0 && pos < (fileName.length() - 1)) { // If '.' is not the first or last character.
-    //         fileName = fileName.substring(0, pos);
-    //     }
-    //     return fileName;
-    // }
-
+    public int[] getHues() {
+        System.out.println("HI MONKEY");
+        int[] hues = new int[360];
+        for (int c = 0; c<360; c++) {
+            hues[c] = 0;                                                                                                                                                                                                                                                                                                                                        
+        }
+        for (Color color :colors.keySet()) {
+            float val = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null)[0];
+            hues[max(Math.round(val * 360))] += colors.get(color);
+        }
+        return hues;
+    }
+    
     public double getFps() {
         return fps;
     }
 
-    
-
-    
-    private void processVideo(int targFPS) throws FFmpegFrameGrabber.Exception {
-        // StopWatch();
+    private void processVideo(int targFPS) throws org.bytedeco.javacv.FrameGrabber.Exception {
         FFmpegFrameGrabber frameGrabber = new FFmpegFrameGrabber("films/" + filmname + ".mp4");
         frameGrabber.setFormat("mp4");
-        // frameGrabber.setFrameRate(2.0);
-        // FFmpegLogCallback.set();
         frameGrabber.start(); 
 
         if (targFPS > frameGrabber.getFrameRate()) {
@@ -107,30 +112,17 @@ public class VideoScanner implements java.io.Serializable{
         // The ratio of frames to be included to the base frame rate of the video.
         double FPSConversionRate = targFPS/frameGrabber.getFrameRate();
         aveColorsInOrder = new ArrayList<>();
-        // StopWatch("Initialisation done");
-
         while ((f = frameGrabber.grab()) != null) {
             try {
-                // StopWatch();
                 BufferedImage bi = c.convert(f);;
-                // StopWatch("Converted and checked");
-
                 if (bi == null) {
                     continue;
                 }
                 totalFrames++;
-                // StopWatch();
                 aveColorsInOrder.add(ColorWeight.averageWeights(bi));
-                // StopWatch("lemons");
-                // StopWatch("average Color added");
                 if (includedFrames/totalFrames < FPSConversionRate) {
-                    // StopWatch();
-                    // StopWatch();
                     addImageToColors(bi);
-                    // StopWatch("orange");
-                    // StopWatch("Colours added to total");
                     includedFrames++;
-                    // System.out.println(includedFrames + "SSSSS");
                     if (includedFrames % Math.round(fps)* 3 == 0) {
                         System.out.println(totalFrames + "/" + frameGrabber.getLengthInVideoFrames());
                     }
@@ -141,6 +133,7 @@ public class VideoScanner implements java.io.Serializable{
         }
         c.close();
         frameGrabber.stop();
+        frameGrabber.close();
     }
 
     private static List<ColorWeight> parseImage(BufferedImage image) throws IOException {
@@ -180,6 +173,16 @@ public class VideoScanner implements java.io.Serializable{
         }
     }
 
+    public void makeHueGraph() throws IOException {
+        HueGraph hg = new HueGraph(getHues());
+        hg.save(filmname);
+        JFrame window = new JFrame();
+        window.setLayout(new BorderLayout());
+        window.getContentPane().add(hg);
+        window.pack();
+        window.setVisible(true);
+    }
+
     private void formDissect() throws IOException {
         VideoDissect rect = new VideoDissect(aveColorsInOrder);
         rect.save("VideoData/" + filmname + "/Dissect.png");
@@ -189,7 +192,6 @@ public class VideoScanner implements java.io.Serializable{
         window.pack();
         // window.setSize(200, 200);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
         window.setVisible(true);
     }
 
@@ -198,28 +200,12 @@ public class VideoScanner implements java.io.Serializable{
         dm.graphColour(k);
     }
 
-
-
     public List<ColorWeight> getColorWeights() {
         List<ColorWeight> cws = new ArrayList<>();
         for (Color cw : colors.keySet()) {
             cws.add(new ColorWeight(cw, colors.get(cw)));
         }
         return cws;
-    }
-
-    private static VideoScanner deserialiseVideoData(String fileName) {
-        VideoScanner vs = null;
-        try {
-            FileInputStream fileIn = new FileInputStream("VideoData/" + fileName + ".ser");
-            ObjectInputStream in = new ObjectInputStream(fileIn);
-            vs = (VideoScanner) in.readObject();
-            in.close();
-            fileIn.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return vs;
     }
 
     private static VideoScanner deserialiseVideoData(String fileName, int fps) {
@@ -236,10 +222,10 @@ public class VideoScanner implements java.io.Serializable{
         return vs;
     }
 
-    private void findAndSaveDoms() throws IOException {
+    private void findAndSaveDoms(float sensitivity) throws IOException {
         DominantMapper dm = new DominantMapper(this);
-        dm.findDominantColors2();
-        dm.save();
+        dm.findDominantColors2(sensitivity);
+        dm.save(sensitivity);
     }   
 
     /**
@@ -251,11 +237,10 @@ public class VideoScanner implements java.io.Serializable{
             File f = new File("VideoData");  
 		    f.mkdir(); 
         }
-
     }
 
     // returns how many seconds it took
-    private static long serialiseVideo(String filename, int frameRate) throws FFmpegFrameGrabber.Exception {
+    private static long serialiseVideo(String filename, int frameRate) throws org.bytedeco.javacv.FrameGrabber.Exception {
         VideoScanner app = new VideoScanner(filename);
         long startime = System.nanoTime();
         app.processVideo(frameRate);
@@ -267,8 +252,6 @@ public class VideoScanner implements java.io.Serializable{
             app.ensureDirExists();
             FileOutputStream outputFile = new FileOutputStream("VideoData\\" + app.getFilmname() + "\\" + app.getFilmname() + "_" + Math.round(app.getFps()) + "fps.ser");
             ObjectOutputStream out = new ObjectOutputStream(outputFile);
-
-            // Method for serialization of object
             out.writeObject(app);
 
             out.close();
@@ -279,50 +262,25 @@ public class VideoScanner implements java.io.Serializable{
         return timeTaken;
     }
 
+    /**
+     * Forms the Dominant Colours, hue graph and video dissect graphics  
+     */
+    private void fullInterpretation() throws IOException {
+        System.out.println("finding dominants");
+        this.findAndSaveDoms(0.95f);
+        System.out.println("Drawing Hue Graph");
+        this.makeHueGraph();
+        System.out.println("Drawing Dissect");
+        this.formDissect();
+    }
+
     public static void main(String []args) throws IOException, Exception
     {
-        // serialiseVideo("Zootopia", 24);
-        // serialiseVideo("All_of_the_Lights", 24);
-        // DominantMapper dm = new DominantMapper(deserialiseVideoData("All_of_the_Lights",3));
-    
-        // for (File film : new File("VideoData").listFiles()) {
-        //     System.out.println(film.getName());
-        // }
+        File dir = new File("VideoData");
         
-        
-        // System.out.println("Kung_Fu_Panda");
-        // deserialiseVideoData("Kung_Fu_Panda",24).formDissect();
-
-        
-        System.out.println("The_Grinch");
-        deserialiseVideoData("The_Grinch",24).findAndSaveDoms();
-
-        
-        System.out.println("The_Hunger_Games");
-        deserialiseVideoData("The_Hunger_Games",24).findAndSaveDoms();
-
-        System.out.println("The_Irishmen");
-        deserialiseVideoData("The_Irishmen",24).findAndSaveDoms();
-
-        System.out.println("Wreck_it_Ralph");
-        deserialiseVideoData("Wreck_it_Ralph",24).findAndSaveDoms();
-
-        //     System.out.println(film.getName());
-        //     VideoScanner app = deserialiseVideoData(film.getName(),24);
-        //     app.setFilmname(film.getName());
-        //     FileOutputStream outputFile = new FileOutputStream(film + "\\" + app.getFilmname() + "_" + Math.round(app.getFps()) + "fps.ser");
-        //     ObjectOutputStream out = new ObjectOutputStream(outputFile);
-
-        //     // Method for serialization of object
-        //     out.writeObject(app);
-
-        //     out.close();
-        //     outputFile.close();
-        // }
-        // File dir = new File("VideoData");
-        // for(File file : dir.listFiles()) {
-        //     File curr = new File("VideoData/" + file.getName().substring(0, file.getName().length()-10));
-        //     curr.mkdir();
-        // }
+        for(File file : dir.listFiles()) {
+            System.out.println(file.getName());
+            deserialiseVideoData(file.getName(), 24).fullInterpretation();
+        }
     }
 }

@@ -49,7 +49,8 @@ public class DominantRectangle extends JPanel {
         int y = 0;
         BufferedImage bufferedImage = new BufferedImage(1500, 1000, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = bufferedImage.createGraphics();
-        colors.sort(Comparator.comparing(o -> o.getWeight()));
+        colors.sort(Comparator.comparingLong(o -> ((Centroid) o).getWeight()).reversed());
+        
         for (Centroid cw : colors) {
             
             g2d.setColor(cw.getColorWeight());
@@ -105,12 +106,12 @@ public class DominantRectangle extends JPanel {
       g.drawImage(scaled, 0, 0, null);
     }
 
-    public void save(String fileName) throws IOException {
+    public void save(String fileName, float sensitivity) throws IOException {
         
-        File outputfile = new File("VideoData/" + fileName + "/Dominants.png");
+        File outputfile = new File("VideoData/" + fileName + "/" + sensitivity + "Dominants.png");
         BufferedImage buffered = new BufferedImage(6000, 4000, BufferedImage.TYPE_INT_RGB);
         buffered.getGraphics().drawImage(img.getScaledInstance(6000, 4000, Image.SCALE_SMOOTH), 0, 0 , null);
         ImageIO.write(buffered, "png", outputfile);
-      }
+    }
 
 }

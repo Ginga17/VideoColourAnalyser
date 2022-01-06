@@ -194,8 +194,8 @@ public class DominantMapper {
     }
 
     private List<Centroid> domColours;
-    public void save() throws IOException {
-        new DominantRectangle(domColours).save(filmname);
+    public void save(float sensitivity) throws IOException {
+        new DominantRectangle(domColours).save(filmname, sensitivity);
     }
 
     public void findDominantColors() {
@@ -219,26 +219,25 @@ public class DominantMapper {
         displayColors(lastCentroids);
     }
 
-    public void findDominantColors2() {
+    private float sensitivity;
+    public void findDominantColors2(float sensitivity) {
+        this.sensitivity = sensitivity;
         List<Centroid> centroids = kMeansCluster(2);
         List<Centroid> lastCentroids = null;
 
-        List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
-        List<ColorWeight> lastMeans = means;
+        // List<ColorWeight> means = centroids.stream().map(o-> o.getColorWeight()).collect(Collectors.toList());
+        // List<ColorWeight> lastMeans = means;
         double dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum(); 
         double lastDistance = dist*2;
         // System.out.println("k = 4: " + centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum());        
-        while(dist/lastDistance < 0.95) {
+        while(dist/lastDistance < sensitivity) {
             System.out.println("PPPPPPPP" + centroids.size());
             lastDistance = dist;
             lastCentroids = centroids;
             centroids = kMeansCluster(centroids);
             dist = centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum();
-            // System.out.println("k = " + k + ": " + centroids.stream().mapToDouble(Centroid::sumDistanceFromMean).sum());
-            // System.out.println("ratio = " + dist/lastDistance);
-
         }
-        System.out.println("k = " + (centroids.size() - 1) + ": " + lastDistance);
+        System.out.println("k = " + (centroids.size() - 1) + ": " + lastDistance + "sensitivity = " + sensitivity);
         System.out.println("ratio = " + dist/lastDistance);
         domColours = lastCentroids;
         displayColors(lastCentroids);
